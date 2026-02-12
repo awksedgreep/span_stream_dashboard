@@ -102,7 +102,7 @@ defmodule SpanStreamDashboard.Components do
               <tr :if={@entries == []}>
                 <td colspan="7" class="text-center text-muted py-4">No spans found.</td>
               </tr>
-              <.span_row :for={span <- @entries} span={span} />
+              <.span_row :for={span <- @entries} span={span} page={@page} socket={@socket} />
             </tbody>
           </table>
           <.pagination
@@ -124,8 +124,20 @@ defmodule SpanStreamDashboard.Components do
   end
 
   attr(:span, :any, required: true)
+  attr(:page, :any, required: true)
+  attr(:socket, :any, required: true)
 
   defp span_row(assigns) do
+    trace_id = assigns.span.trace_id || ""
+
+    trace_path =
+      Phoenix.LiveDashboard.PageBuilder.live_dashboard_path(assigns.socket, assigns.page, %{
+        nav: "traces",
+        trace_id: trace_id
+      })
+
+    assigns = assign(assigns, trace_id: trace_id, trace_path: trace_path)
+
     ~H"""
     <tr>
       <td class="text-monospace" style="font-size: 0.8rem;">
@@ -142,8 +154,10 @@ defmodule SpanStreamDashboard.Components do
       <td class="text-monospace" style="font-size: 0.8rem;">
         {format_duration(@span.duration_ns)}
       </td>
-      <td style="font-size: 0.75rem; font-family: monospace;">
-        {String.slice(@span.trace_id || "", 0..11)}<span class="text-muted">...</span>
+      <td style="font-size: 0.75rem; font-family: monospace;" title={@trace_id}>
+        <.link patch={@trace_path} style="text-decoration: none;">
+          {String.slice(@trace_id, 0..11)}<span class="text-muted">...</span>
+        </.link>
       </td>
     </tr>
     """
@@ -456,6 +470,8 @@ defmodule SpanStreamDashboard.Components do
 
   attr(:entries, :list, required: true)
   attr(:subscribed, :boolean, required: true)
+  attr(:page, :any, required: true)
+  attr(:socket, :any, required: true)
 
   def tail_tab(assigns) do
     ~H"""
@@ -498,7 +514,7 @@ defmodule SpanStreamDashboard.Components do
                     else: "Click Start to begin streaming."}
                 </td>
               </tr>
-              <.span_row :for={span <- @entries} span={span} />
+              <.span_row :for={span <- @entries} span={span} page={@page} socket={@socket} />
             </tbody>
           </table>
         </div>

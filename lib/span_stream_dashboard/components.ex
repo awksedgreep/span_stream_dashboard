@@ -255,11 +255,54 @@ defmodule SpanStreamDashboard.Components do
 
   # --- Trace tab ---
 
+  @service_colors [
+    "#4e79a7",
+    "#f28e2b",
+    "#e15759",
+    "#76b7b2",
+    "#59a14f",
+    "#edc948",
+    "#b07aa1",
+    "#ff9da7",
+    "#9c755f",
+    "#bab0ac"
+  ]
+
   attr(:spans, :list, required: true)
   attr(:trace_id_input, :string, required: true)
   attr(:trace_id, :any, required: true)
 
   def trace_tab(assigns) do
+    assigns =
+      if assigns.trace_id && assigns.spans != [] do
+        tree = build_span_tree(assigns.spans)
+        flat = flatten_tree(tree, 0)
+        trace_start = assigns.spans |> Enum.map(& &1.start_time) |> Enum.min()
+        trace_end = assigns.spans |> Enum.map(& &1.end_time) |> Enum.max()
+        trace_dur = max(1, trace_end - trace_start)
+
+        services =
+          assigns.spans
+          |> Enum.map(&get_service/1)
+          |> Enum.uniq()
+          |> Enum.with_index()
+          |> Map.new(fn {svc, i} ->
+            {svc, Enum.at(@service_colors, rem(i, length(@service_colors)))}
+          end)
+
+        assigns
+        |> assign(:tree_rows, flat)
+        |> assign(:trace_start, trace_start)
+        |> assign(:trace_dur, trace_dur)
+        |> assign(:service_colors, services)
+      else
+        assigns
+        |> assign(:tree_rows, [])
+        |> assign(:trace_start, 0)
+        |> assign(:trace_dur, 1)
+        |> assign(:service_colors, %{})
+      end
+
     ~H"""
     <div class="mb-4">
       <form phx-submit="lookup_trace" class="d-flex align-items-end mb-3" style="gap: 0.75rem;">
@@ -277,39 +320,94 @@ defmodule SpanStreamDashboard.Components do
         <button type="submit" class="btn btn-primary btn-sm">Lookup</button>
       </form>
 
-      <div :if={@trace_id} class="card">
+      <div :if={@trace_id && @spans != []} class="card">
         <div class="card-body p-0">
-          <div class="d-flex justify-content-between align-items-center px-3 py-2">
-            <small class="text-muted">
-              Trace <code>{@trace_id}</code> — {length(@spans)} {if length(@spans) == 1,
-                do: "span",
-                else: "spans"}
-            </small>
-            <small :if={@spans != []} class="text-muted">
-              Total: {format_duration(trace_duration(@spans))}
-            </small>
+          <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+            <div>
+              <span class="fw-semibold" style="font-size: 0.9rem;">Trace</span>
+              <code class="ms-1" style="font-size: 0.8rem;">{@trace_id}</code>
+            </div>
+            <div class="d-flex align-items-center" style="gap: 1rem;">
+              <small class="text-muted">
+                {length(@spans)} {if length(@spans) == 1, do: "span", else: "spans"}
+              </small>
+              <span class="fw-semibold" style="font-size: 0.85rem;">
+                {format_duration(trace_duration(@spans))}
+              </span>
+            </div>
           </div>
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr>
-                <th style="width: 160px;">Start Time</th>
-                <th>Name</th>
-                <th style="width: 130px;">Service</th>
-                <th style="width: 80px;">Kind</th>
-                <th style="width: 70px;">Status</th>
-                <th style="width: 90px;">Duration</th>
-                <th style="width: 100px;">Span ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr :if={@spans == []}>
-                <td colspan="7" class="text-center text-muted py-4">
-                  No spans found for this trace.
-                </td>
-              </tr>
-              <.trace_span_row :for={span <- @spans} span={span} />
-            </tbody>
-          </table>
+          <%!-- Service legend --%>
+          <div class="d-flex flex-wrap px-3 py-2 border-bottom" style="gap: 0.75rem;">
+            <div
+              :for={{svc, color} <- @service_colors}
+              class="d-flex align-items-center"
+              style="gap: 0.3rem;"
+            >
+              <span style={"width: 10px; height: 10px; border-radius: 2px; background: #{color}; display: inline-block;"}>
+              </span>
+              <small style="font-size: 0.75rem;">{svc}</small>
+            </div>
+          </div>
+          <%!-- Timeline header --%>
+          <div class="d-flex border-bottom" style="font-size: 0.7rem; color: #888;">
+            <div style="width: 38%; min-width: 280px; padding: 4px 12px;">
+              Service / Operation
+            </div>
+            <div class="flex-grow-1 d-flex justify-content-between px-2" style="padding: 4px 0;">
+              <span>0ms</span>
+              <span>{format_duration(div(@trace_dur, 4))}</span>
+              <span>{format_duration(div(@trace_dur, 2))}</span>
+              <span>{format_duration(div(@trace_dur * 3, 4))}</span>
+              <span>{format_duration(@trace_dur)}</span>
+            </div>
+          </div>
+          <%!-- Span rows --%>
+          <div :for={{span, depth} <- @tree_rows} class="waterfall-row d-flex border-bottom"
+               style={"font-size: 0.8rem; #{if span.status == :error, do: "background: #fff5f5;", else: ""}"}>
+            <%!-- Left panel: service + name --%>
+            <div style={"width: 38%; min-width: 280px; padding: 6px 12px; padding-left: #{12 + depth * 16}px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;"}>
+              <span
+                :if={depth > 0}
+                class="text-muted me-1"
+                style="font-size: 0.7rem;"
+              >&#x2514;</span>
+              <span
+                style={"color: #{Map.get(@service_colors, get_service(span), "#888")}; font-weight: 600; font-size: 0.75rem;"}
+              >{get_service(span)}</span>
+              <span class="text-muted mx-1" style="font-size: 0.65rem;">&#x25B8;</span>
+              <span title={span.name}>{span.name}</span>
+              <.status_dot status={span.status} />
+            </div>
+            <%!-- Right panel: waterfall bar --%>
+            <div class="flex-grow-1 position-relative" style="padding: 4px 8px;">
+              <% offset_pct = (span.start_time - @trace_start) / @trace_dur * 100 %>
+              <% width_pct = max(0.3, span.duration_ns / @trace_dur * 100) %>
+              <div
+                style={"position: absolute; top: 5px; bottom: 5px; left: #{offset_pct}%; width: #{width_pct}%; background: #{Map.get(@service_colors, get_service(span), "#888")}; border-radius: 3px; min-width: 2px; opacity: 0.85;"}
+                title={"#{span.name} — #{format_duration(span.duration_ns)}"}
+              >
+                <span
+                  :if={width_pct > 8}
+                  style="position: absolute; left: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; color: #fff; font-weight: 600; white-space: nowrap;"
+                >
+                  {format_duration(span.duration_ns)}
+                </span>
+              </div>
+              <span
+                :if={width_pct <= 8}
+                style={"position: absolute; top: 50%; transform: translateY(-50%); left: #{offset_pct + width_pct + 0.5}%; font-size: 0.65rem; color: #666; white-space: nowrap;"}
+              >
+                {format_duration(span.duration_ns)}
+              </span>
+            </div>
+          </div>
+          <%!-- Empty state within card (shouldn't happen but just in case) --%>
+        </div>
+      </div>
+
+      <div :if={@trace_id && @spans == []} class="card">
+        <div class="card-body text-center text-muted py-4">
+          No spans found for this trace.
         </div>
       </div>
 
@@ -320,34 +418,54 @@ defmodule SpanStreamDashboard.Components do
     """
   end
 
-  attr(:span, :any, required: true)
+  attr(:status, :any, required: true)
 
-  defp trace_span_row(assigns) do
-    indent = if assigns.span.parent_span_id, do: 1, else: 0
-    assigns = assign(assigns, :indent, indent)
+  defp status_dot(assigns) do
+    color =
+      case to_string(assigns.status) do
+        "error" -> "#dc3545"
+        "ok" -> "#198754"
+        _ -> nil
+      end
+
+    assigns = assign(assigns, :color, color)
 
     ~H"""
-    <tr>
-      <td class="text-monospace" style="font-size: 0.8rem;">
-        {format_timestamp(@span.start_time)}
-      </td>
-      <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-        <span :if={@indent > 0} style={"padding-left: #{@indent * 16}px;"}>
-          <span class="text-muted">&#x2514;</span>
-        </span>
-        {@span.name}
-      </td>
-      <td style="font-size: 0.85rem;">{get_service(@span)}</td>
-      <td><.kind_badge kind={@span.kind} /></td>
-      <td><.status_badge status={@span.status} /></td>
-      <td class="text-monospace" style="font-size: 0.8rem;">
-        {format_duration(@span.duration_ns)}
-      </td>
-      <td style="font-size: 0.75rem; font-family: monospace;">
-        {String.slice(@span.span_id || "", 0..7)}
-      </td>
-    </tr>
+    <span
+      :if={@color}
+      style={"display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #{@color}; margin-left: 4px; vertical-align: middle;"}
+      title={to_string(@status)}
+    >
+    </span>
     """
+  end
+
+  # Build a tree of spans from parent_span_id relationships
+  defp build_span_tree(spans) do
+    by_id = Map.new(spans, &{&1.span_id, &1})
+    children_map = Enum.group_by(spans, & &1.parent_span_id)
+
+    roots =
+      spans
+      |> Enum.filter(fn s ->
+        s.parent_span_id == nil or not Map.has_key?(by_id, s.parent_span_id)
+      end)
+      |> Enum.sort_by(& &1.start_time)
+
+    Enum.map(roots, fn root -> {root, build_children(root.span_id, children_map)} end)
+  end
+
+  defp build_children(span_id, children_map) do
+    (Map.get(children_map, span_id) || [])
+    |> Enum.sort_by(& &1.start_time)
+    |> Enum.map(fn child -> {child, build_children(child.span_id, children_map)} end)
+  end
+
+  # Flatten tree into [{span, depth}] for rendering
+  defp flatten_tree(nodes, depth) do
+    Enum.flat_map(nodes, fn {span, children} ->
+      [{span, depth} | flatten_tree(children, depth + 1)]
+    end)
   end
 
   # --- Stats tab ---

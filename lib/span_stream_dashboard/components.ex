@@ -271,6 +271,7 @@ defmodule SpanStreamDashboard.Components do
   attr(:spans, :list, required: true)
   attr(:trace_id_input, :string, required: true)
   attr(:trace_id, :any, required: true)
+  attr(:lookup_us, :any, default: nil)
 
   def trace_tab(assigns) do
     assigns =
@@ -330,6 +331,9 @@ defmodule SpanStreamDashboard.Components do
             <div class="d-flex align-items-center" style="gap: 1rem;">
               <small class="text-muted">
                 {length(@spans)} {if length(@spans) == 1, do: "span", else: "spans"}
+              </small>
+              <small :if={@lookup_us} class="text-muted" title="Trace lookup time">
+                {format_lookup_time(@lookup_us)}
               </small>
               <span class="fw-semibold" style="font-size: 0.85rem;">
                 {format_duration(trace_duration(@spans))}
@@ -684,6 +688,9 @@ defmodule SpanStreamDashboard.Components do
   end
 
   defp format_duration(_), do: "-"
+
+  defp format_lookup_time(us) when us >= 1000, do: "found in #{Float.round(us / 1000, 1)}ms"
+  defp format_lookup_time(us), do: "found in #{us}us"
 
   defp trace_duration([]), do: 0
 

@@ -21,6 +21,7 @@ defmodule SpanStreamDashboard.Page do
        trace_spans: [],
        trace_id_input: "",
        trace_id: nil,
+       trace_lookup_us: nil,
        tail_entries: [],
        subscribed: false,
        search: "",
@@ -67,6 +68,7 @@ defmodule SpanStreamDashboard.Page do
       spans={@trace_spans}
       trace_id_input={@trace_id_input}
       trace_id={@trace_id}
+      lookup_us={@trace_lookup_us}
     />
     <.stats_tab :if={@nav == "stats"} stats={@stats} />
     <.tail_tab :if={@nav == "tail"} entries={@tail_entries} subscribed={@subscribed} />
@@ -129,15 +131,31 @@ defmodule SpanStreamDashboard.Page do
       # Flush buffer so recently-arrived spans (e.g. from Live Tail) are indexed
       SpanStream.flush()
 
+      start = System.monotonic_time(:microsecond)
+
       case SpanStream.trace(trace_id) do
         {:ok, spans} ->
-          assign(socket, trace_spans: spans, trace_id_input: trace_id, trace_id: trace_id)
+          elapsed_us = System.monotonic_time(:microsecond) - start
+
+          assign(socket,
+            trace_spans: spans,
+            trace_id_input: trace_id,
+            trace_id: trace_id,
+            trace_lookup_us: elapsed_us
+          )
 
         {:error, _} ->
-          assign(socket, trace_spans: [], trace_id_input: trace_id, trace_id: trace_id)
+          elapsed_us = System.monotonic_time(:microsecond) - start
+
+          assign(socket,
+            trace_spans: [],
+            trace_id_input: trace_id,
+            trace_id: trace_id,
+            trace_lookup_us: elapsed_us
+          )
       end
     else
-      assign(socket, trace_spans: [], trace_id_input: "", trace_id: nil)
+      assign(socket, trace_spans: [], trace_id_input: "", trace_id: nil, trace_lookup_us: nil)
     end
   end
 

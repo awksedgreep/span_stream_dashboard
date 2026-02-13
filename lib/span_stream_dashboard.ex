@@ -1,6 +1,6 @@
 defmodule SpanStreamDashboard do
   @moduledoc """
-  Phoenix LiveDashboard page for browsing OpenTelemetry spans stored by SpanStream.
+  Phoenix LiveDashboard page for browsing OpenTelemetry spans stored by TimelessTraces.
 
   ## Usage
 

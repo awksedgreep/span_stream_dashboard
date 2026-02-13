@@ -69,13 +69,13 @@ Application.put_env(:span_stream_dashboard, Demo.Endpoint,
 
 # Stop span_stream (auto-started by mix run with disk defaults),
 # reconfigure for in-memory mode, then restart
-Application.stop(:span_stream)
-Application.put_env(:span_stream, :storage, :memory)
-Application.put_env(:span_stream, :flush_interval, 5_000)
-Application.put_env(:span_stream, :max_buffer_size, 500)
-Application.put_env(:span_stream, :compaction_interval, 10_000)
-Application.put_env(:span_stream, :compaction_threshold, 500)
-Application.put_env(:span_stream, :compaction_max_raw_age, 30)
+Application.stop(:timeless_traces)
+Application.put_env(:timeless_traces, :storage, :memory)
+Application.put_env(:timeless_traces, :flush_interval, 5_000)
+Application.put_env(:timeless_traces, :max_buffer_size, 500)
+Application.put_env(:timeless_traces, :compaction_interval, 10_000)
+Application.put_env(:timeless_traces, :compaction_threshold, 500)
+Application.put_env(:timeless_traces, :compaction_max_raw_age, 30)
 
 # Start deps
 {:ok, _} = Application.ensure_all_started(:phoenix_live_dashboard)
@@ -87,8 +87,8 @@ Application.put_env(:span_stream, :compaction_max_raw_age, 30)
     strategy: :one_for_one
   )
 
-# Restart SpanStream with memory config
-{:ok, _} = Application.ensure_all_started(:span_stream)
+# Restart TimelessTraces with memory config
+{:ok, _} = Application.ensure_all_started(:timeless_traces)
 
 # Start endpoint
 {:ok, _} = Demo.Endpoint.start_link()
@@ -198,6 +198,6 @@ Stream.interval(500)
 
   spans = Enum.flat_map(1..trace_count, fn _ -> build_trace.() end)
 
-  SpanStream.Buffer.ingest(spans)
+  TimelessTraces.Buffer.ingest(spans)
 end)
 |> Stream.run()

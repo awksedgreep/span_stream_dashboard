@@ -503,7 +503,7 @@ defmodule SpanStreamDashboard.Components do
           <div class="card-body text-center">
             <h6 class="card-subtitle text-muted mb-1">Storage Mode</h6>
             <h4 class="mb-0">
-              <span class="badge bg-info">{SpanStream.Config.storage()}</span>
+              <span class="badge bg-info">{TimelessTraces.Config.storage()}</span>
             </h4>
           </div>
         </div>
@@ -650,7 +650,7 @@ defmodule SpanStreamDashboard.Components do
   defp format_timestamp(nil), do: "-"
 
   defp format_timestamp(ts) when is_integer(ts) do
-    # SpanStream timestamps are in nanoseconds
+    # TimelessTraces timestamps are in nanoseconds
     case ts > 1_000_000_000_000_000_000 do
       true ->
         secs = div(ts, 1_000_000_000)

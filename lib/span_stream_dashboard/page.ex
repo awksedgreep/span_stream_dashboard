@@ -95,8 +95,8 @@ defmodule SpanStreamDashboard.Page do
     filters = build_filters(name, service, kind, status)
     query_opts = filters ++ [limit: per_page, offset: offset, order: :desc]
 
-    case SpanStream.query(query_opts) do
-      {:ok, %SpanStream.Result{entries: entries, total: total}} ->
+    case TimelessTraces.query(query_opts) do
+      {:ok, %TimelessTraces.Result{entries: entries, total: total}} ->
         assign(socket,
           entries: entries,
           total: total,
@@ -129,11 +129,11 @@ defmodule SpanStreamDashboard.Page do
 
     if trace_id != "" do
       # Flush buffer so recently-arrived spans (e.g. from Live Tail) are indexed
-      SpanStream.flush()
+      TimelessTraces.flush()
 
       start = System.monotonic_time(:microsecond)
 
-      case SpanStream.trace(trace_id) do
+      case TimelessTraces.trace(trace_id) do
         {:ok, spans} ->
           elapsed_us = System.monotonic_time(:microsecond) - start
 
@@ -160,7 +160,7 @@ defmodule SpanStreamDashboard.Page do
   end
 
   defp apply_nav("stats", _params, socket) do
-    case SpanStream.stats() do
+    case TimelessTraces.stats() do
       {:ok, stats} -> assign(socket, :stats, stats)
       _ -> socket
     end
@@ -168,7 +168,7 @@ defmodule SpanStreamDashboard.Page do
 
   defp apply_nav("tail", _params, socket) do
     if connected?(socket) and not socket.assigns.subscribed do
-      SpanStream.subscribe()
+      TimelessTraces.subscribe()
       assign(socket, subscribed: true, tail_entries: [])
     else
       socket
@@ -225,16 +225,16 @@ defmodule SpanStreamDashboard.Page do
 
   def handle_event("toggle_tail", _, socket) do
     if socket.assigns.subscribed do
-      SpanStream.unsubscribe()
+      TimelessTraces.unsubscribe()
       {:noreply, assign(socket, subscribed: false)}
     else
-      SpanStream.subscribe()
+      TimelessTraces.subscribe()
       {:noreply, assign(socket, subscribed: true, tail_entries: [])}
     end
   end
 
   @impl true
-  def handle_info({:span_stream, :span, span}, socket) do
+  def handle_info({:timeless_traces, :span, span}, socket) do
     tail = [span | socket.assigns.tail_entries] |> Enum.take(@tail_cap)
     {:noreply, assign(socket, :tail_entries, tail)}
   end
